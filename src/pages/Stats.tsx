@@ -66,35 +66,73 @@ function ContributionGraph({ data }: { data: { date: string; count: number }[] }
     return 'rgba(59, 130, 246, 0.9)'
   }
 
+  const getTextColor = (count: number) => {
+    if (count >= 15) return 'text-white'
+    if (count >= 5) return 'text-slate-300'
+    return 'text-slate-500'
+  }
+
+  const isToday = (d: Date) => {
+    return d.toDateString() === today.toDateString()
+  }
+
   return (
     <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
       <h3 className="text-sm font-medium text-white mb-4">学习日历</h3>
-      <div className="flex gap-1 mb-1">
-        <div className="w-4" />
-        {weekDays.map(d => (
-          <div key={d} className="w-3 h-3 flex items-center justify-center">
-            <span className="text-[10px] text-slate-500">{d}</span>
+      <div className="overflow-x-auto">
+        <div className="inline-flex gap-0.5">
+          {/* 星期列 */}
+          <div className="flex flex-col gap-0.5 mr-1">
+            <div className="w-7 h-7" />
+            {weekDays.map((d, i) => (
+              <div key={i} className="w-7 h-7 flex items-center justify-center">
+                <span className="text-[10px] text-slate-500">{d}</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      {grid.map((week, i) => (
-        <div key={i} className="flex gap-1 mb-1">
-          <div className="w-4 flex items-center">
-            {week[0].date.getDate() === 1 && (
-              <span className="text-[10px] text-slate-500">{months[week[0].date.getMonth()]}</span>
-            )}
-          </div>
-          {week.map((cell, j) => (
-            <div
-              key={`${i}-${j}`}
-              className="w-3 h-3 rounded-sm"
-              style={{ backgroundColor: getColor(cell.count) }}
-              title={`${cell.date.toLocaleDateString()}: ${cell.count} words`}
-            />
+          {/* 日期网格 - 按星期行排列 */}
+          {Array.from({ length: 7 }, (_, dayOfWeek) => (
+            <div key={dayOfWeek} className="flex flex-col gap-0.5">
+              {/* 月份标签行 */}
+              <div className="w-7 h-7 relative">
+                {grid.map((week, wi) => {
+                  const cell = week[dayOfWeek]
+                  if (!cell) return null
+                  if (cell.date.getDate() === 1 || (wi === 0 && dayOfWeek === 0)) {
+                    return (
+                      <span
+                        key={wi}
+                        className="absolute text-[10px] text-slate-500 whitespace-nowrap"
+                        style={{ left: `${wi * 30}px`, top: 0 }}
+                      >
+                        {months[cell.date.getMonth()]}
+                      </span>
+                    )
+                  }
+                  return null
+                })}
+              </div>
+              {/* 日期格子 */}
+              {grid.map((week, wi) => {
+                const cell = week[dayOfWeek]
+                if (!cell) return <div key={wi} className="w-7 h-7" />
+                const dateNum = cell.date.getDate()
+                return (
+                  <div
+                    key={wi}
+                    className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-medium transition-colors ${getTextColor(cell.count)} ${isToday(cell.date) ? 'ring-1 ring-blue-400' : ''}`}
+                    style={{ backgroundColor: getColor(cell.count) }}
+                    title={`${cell.date.toLocaleDateString()} 星期${weekDays[cell.date.getDay() === 0 ? 6 : cell.date.getDay() - 1]}: ${cell.count} 个单词`}
+                  >
+                    {dateNum}
+                  </div>
+                )
+              })}
+            </div>
           ))}
         </div>
-      ))}
-      <div className="flex items-center justify-end gap-2 mt-2">
+      </div>
+      <div className="flex items-center justify-end gap-2 mt-3">
         <span className="text-[10px] text-slate-500">少</span>
         <div className="flex gap-1">
           {[0, 4, 10, 20].map(c => (
