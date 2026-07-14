@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
-import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope } from 'lucide-react'
+import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope, ScanText } from 'lucide-react'
 import {
   getSubjectsForUser, addSubject as addLocalSubject, deleteSubject as deleteLocalSubject,
   getWordsBySubject, addWord as addLocalWord, deleteWord as deleteLocalWord,
   Subject, Word,
 } from '@/lib/localData'
+import OcrImport from '@/components/OcrImport'
 
 interface SubjectWithCount extends Subject {
   wordCount: number
@@ -21,6 +22,7 @@ export default function Subjects() {
   const [words, setWords] = useState<Word[]>([])
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [addWordModalOpen, setAddWordModalOpen] = useState(false)
+  const [ocrModalOpen, setOcrModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const [newSubjectName, setNewSubjectName] = useState('')
@@ -89,6 +91,28 @@ export default function Subjects() {
       deleteLocalWord(id)
       setWords(words.filter(w => w.id !== id))
     } catch {}
+  }
+
+  const batchImportFromOcr = (ocrResults: { english: string; chinese: string }[]) => {
+    if (!user || !selectedSubject) return
+    const newWords: Word[] = []
+    for (const r of ocrResults) {
+      try {
+        const added = addLocalWord(selectedSubject.id, {
+          english: r.english,
+          chinese: r.chinese,
+          pronunciation: '',
+          definition: '',
+          exampleSentence: '',
+          exampleTranslation: '',
+          root: '',
+          rootMeaning: '',
+        })
+        newWords.push(added)
+      } catch {}
+    }
+    setWords([...words, ...newWords])
+    loadSubjects()
   }
 
   return (
@@ -233,9 +257,17 @@ export default function Subjects() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-medium text-white">添加单词</h3>
-                <button onClick={() => setAddWordModalOpen(false)} className="text-slate-500">
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setAddWordModalOpen(false); setOcrModalOpen(true) }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600/20 border border-cyan-500/30 text-cyan-400 text-xs rounded-xl hover:bg-cyan-600/30 transition-colors"
+                  >
+                    <ScanText className="w-3.5 h-3.5" /> OCR 导入
+                  </button>
+                  <button onClick={() => setAddWordModalOpen(false)} className="text-slate-500">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -319,6 +351,16 @@ export default function Subjects() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OCR Import Modal */}
+      <AnimatePresence>
+        {ocrModalOpen && (
+          <OcrImport
+            onResult={batchImportFromOcr}
+            onClose={() => setOcrModalOpen(false)}
+          />
         )}
       </AnimatePresence>
     </div>
