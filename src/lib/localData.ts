@@ -293,6 +293,16 @@ export function deleteSubject(_userId: string, subjectId: number): void {
   writeStore('medterm_progress', progress)
 }
 
+export function renameSubject(subjectId: number, newName: string): void {
+  initialize()
+  const subjects = getSubjects()
+  const idx = subjects.findIndex(s => s.id === subjectId)
+  if (idx >= 0) {
+    subjects[idx].name = newName
+    writeStore('medterm_subjects', subjects)
+  }
+}
+
 // ============ Word functions ============
 
 export function getWordsBySubject(subjectId: number): Word[] {
@@ -366,7 +376,7 @@ export function getProgressForUser(userId: string): {
   streak: number
   subjectProgress: { name: string; progress: number; color: string }[]
   dailyStats: { date: string; count: number }[]
-  recentActivity: { word: string; subject: string; time: string; type: string }[]
+  recentActivity: { word: string; chinese: string; subject: string; time: string; type: string }[]
 } {
   initialize()
   const words = getWords()
@@ -422,6 +432,7 @@ export function getProgressForUser(userId: string): {
       const time = p.lastReviewedAt ? new Date(p.lastReviewedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''
       return {
         word: word?.english || '',
+        chinese: word?.chinese || '',
         subject: subject?.name || '',
         time,
         type: p.status === 'known' ? '认识' : '不认识',
@@ -524,6 +535,88 @@ export function getSubjectStats(userId: string): { name: string; mastered: numbe
     }).length
     return { name: s.name, mastered, total: subjectWords.length }
   })
+}
+
+// ============ Daily word limit settings ============
+
+interface DailyLimit {
+  subjectId: number
+  limit: number // 0 means no limit
+}
+
+function getDailyLimitsRecord(): Record<number, number> {
+  try {
+    const raw = localStorage.getItem('medterm_dailyLimits')
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function setDailyLimitsRecord(limits: Record<number, number>): void {
+  localStorage.setItem('medterm_dailyLimits', JSON.stringify(limits))
+}
+
+export function getDailyLimit(subjectId: number): number {
+  const limits = getDailyLimitsRecord()
+  return limits[subjectId] || 0
+}
+
+export function setDailyLimit(subjectId: number, limit: number): void {
+  const limits = getDailyLimitsRecord()
+  limits[subjectId] = limit
+  setDailyLimitsRecord(limits)
+}
+
+// ============ Daily progress tracking ============
+
+interface DailyProgress {
+  date: string // YYYY-MM-DD
+  [subjectId: number]: number[] // word IDs studied today
+}
+
+function getDailyProgress(): DailyProgress {
+  try {
+    const raw = localStorage.getItem('medterm_dailyProgress')
+    return raw ? JSON.parse(raw) : { date: '', ...{} }
+  } catch {
+    return { date: '' }
+  }
+}
+
+function saveDailyProgress(progress: DailyProgress): void {
+  localStorage.setItem('medterm_dailyProgress', JSON.stringify(progress))
+}
+
+export function getStudiedToday(subjectId: number): number[] {
+  const today = new Date().toISOString().slice(0, 10)
+  const progress = getDailyProgress()
+  if (progress.date !== today) return []
+  return progress[subjectId] || []
+}
+
+export function markStudiedToday(subjectId: number, wordId: number): void {
+  const today = new Date().toISOString().slice(0, 10)
+  const progress = getDailyProgress()
+  if (progress.date !== today) {
+    // New day, reset
+    progress.date = today
+    progress[subjectId] = [wordId]
+  } else {
+    const ids = progress[subjectId] || []
+    if (!ids.includes(wordId)) {
+      ids.push(wordId)
+      progress[subjectId] = ids
+    }
+  }
+  saveDailyProgress(progress)
+}
+
+export function getRemainingToday(subjectId: number, totalWords: number): number {
+  const limit = getDailyLimit(subjectId)
+  if (limit === 0) return totalWords // no limit
+  const studied = getStudiedToday(subjectId)
+  return Math.max(0, limit - studied.length)
 }
 
 export function getDailyStats(userId: string): { date: string; count: number }[] {

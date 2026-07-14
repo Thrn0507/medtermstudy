@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
-import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope, ScanText } from 'lucide-react'
+import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope, ScanText, Volume2, Pencil } from 'lucide-react'
+import { speakWord } from '@/lib/pronunciation'
 import {
   getSubjectsForUser, addSubject as addLocalSubject, deleteSubject as deleteLocalSubject,
   getWordsBySubject, addWord as addLocalWord, deleteWord as deleteLocalWord,
+  renameSubject as renameLocalSubject,
   Subject, Word,
 } from '@/lib/localData'
 import OcrImport from '@/components/OcrImport'
@@ -24,6 +26,8 @@ export default function Subjects() {
   const [addWordModalOpen, setAddWordModalOpen] = useState(false)
   const [ocrModalOpen, setOcrModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [editingSubjectId, setEditingSubjectId] = useState<number | null>(null)
+  const [editSubjectName, setEditSubjectName] = useState('')
 
   const [newSubjectName, setNewSubjectName] = useState('')
   const [newWord, setNewWord] = useState<Partial<Word>>({
@@ -71,6 +75,19 @@ export default function Subjects() {
     } catch {}
   }
 
+  const startRename = (subject: SubjectWithCount) => {
+    setEditingSubjectId(subject.id)
+    setEditSubjectName(subject.name)
+  }
+
+  const confirmRename = () => {
+    if (!editingSubjectId || !editSubjectName.trim()) return
+    renameLocalSubject(editingSubjectId, editSubjectName.trim())
+    setEditingSubjectId(null)
+    setEditSubjectName('')
+    loadSubjects()
+  }
+
   const addWord = () => {
     if (!user || !selectedSubject || !newWord.english || !newWord.chinese) return
     setLoading(true)
@@ -93,7 +110,7 @@ export default function Subjects() {
     } catch {}
   }
 
-  const batchImportFromOcr = (ocrResults: { english: string; chinese: string }[]) => {
+  const batchImportFromOcr = (ocrResults: { english: string; chinese: string; pronunciation?: string }[]) => {
     if (!user || !selectedSubject) return
     const newWords: Word[] = []
     for (const r of ocrResults) {
@@ -101,7 +118,7 @@ export default function Subjects() {
         const added = addLocalWord(selectedSubject.id, {
           english: r.english,
           chinese: r.chinese,
-          pronunciation: '',
+          pronunciation: r.pronunciation || '',
           definition: '',
           exampleSentence: '',
           exampleTranslation: '',
@@ -131,20 +148,42 @@ export default function Subjects() {
               key={subject.id}
               className={`relative bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-blue-500/40 transition-all
                 ${selectedSubject?.id === subject.id ? 'border-blue-500/50 bg-blue-500/10' : ''}`}
-              onClick={() => loadWords(subject)}
+              onClick={() => { if (editingSubjectId !== subject.id) loadWords(subject) }}
             >
-              {!subject.isPreset && (
+              <div className="absolute top-2 right-2 flex gap-1">
                 <button
-                  onClick={(e) => { e.stopPropagation(); deleteSubject(subject.id) }}
-                  className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-400"
+                  onClick={(e) => { e.stopPropagation(); startRename(subject) }}
+                  className="p-1 text-slate-500 hover:text-blue-400"
+                  title="重命名"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Pencil className="w-3.5 h-3.5" />
                 </button>
-              )}
+                {!subject.isPreset && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSubject(subject.id) }}
+                    className="p-1 text-slate-500 hover:text-red-400"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center mb-3">
                 <Icon className="w-5 h-5 text-blue-400" />
               </div>
-              <h3 className="text-sm font-medium text-white">{subject.name}</h3>
+              {editingSubjectId === subject.id ? (
+                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                  <input
+                    value={editSubjectName}
+                    onChange={e => setEditSubjectName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmRename() }}
+                    className="w-full bg-white/[0.08] border border-blue-500/50 rounded-lg px-2 py-0.5 text-sm text-white focus:outline-none"
+                    autoFocus
+                  />
+                  <button onClick={confirmRename} className="text-blue-400 hover:text-blue-300 text-xs flex-shrink-0">确定</button>
+                </div>
+              ) : (
+                <h3 className="text-sm font-medium text-white">{subject.name}</h3>
+              )}
               <p className="text-xs text-slate-500 mt-1">{subject.wordCount} 个单词</p>
             </div>
           )
@@ -182,7 +221,15 @@ export default function Subjects() {
               {words.map(word => (
                 <div key={word.id} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{word.english}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-white truncate">{word.english}</p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); speakWord(word.english) }}
+                        className="text-slate-500 hover:text-blue-400 flex-shrink-0"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <p className="text-xs text-slate-400 truncate">{word.chinese}</p>
                     {word.phonetic && <p className="text-[10px] text-slate-600">{word.phonetic}</p>}
                   </div>
@@ -262,7 +309,7 @@ export default function Subjects() {
                     onClick={() => { setAddWordModalOpen(false); setOcrModalOpen(true) }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600/20 border border-cyan-500/30 text-cyan-400 text-xs rounded-xl hover:bg-cyan-600/30 transition-colors"
                   >
-                    <ScanText className="w-3.5 h-3.5" /> OCR 导入
+                    <ScanText className="w-3.5 h-3.5" /> 批量导入
                   </button>
                   <button onClick={() => setAddWordModalOpen(false)} className="text-slate-500">
                     <X className="w-5 h-5" />

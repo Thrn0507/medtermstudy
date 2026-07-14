@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
-import { X, Check, XCircle } from 'lucide-react'
+import { X, Check, XCircle, Volume2 } from 'lucide-react'
 import { getReviewWords, updateProgress } from '@/lib/localData'
+import { speakWord } from '@/lib/pronunciation'
 
 interface ReviewWord {
   id: number
@@ -104,7 +105,10 @@ export default function ReviewModal({ open, onClose }: { open: boolean; onClose:
                   {!flipped ? (
                     <div className="text-center" style={{ backfaceVisibility: 'hidden' }}>
                       <p className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Georgia, serif' }}>{current.english}</p>
-                      <p className="text-xs text-slate-500">点击翻转查看释义</p>
+                      <button onClick={(e) => { e.stopPropagation(); speakWord(current.english) }} className="text-slate-500 hover:text-blue-400 transition-colors inline-flex items-center gap-1 mx-auto" title="朗读发音">
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                      <p className="text-xs text-slate-500 mt-2">点击翻转查看释义</p>
                     </div>
                   ) : (
                     <div className="text-center px-4" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>

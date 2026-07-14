@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
-import { RotateCcw, Trophy, Timer } from 'lucide-react'
+import { RotateCcw, Trophy, Timer, Settings2 } from 'lucide-react'
 import { getSubjectsForUser, getGameWords, Word } from '@/lib/localData'
 
 interface Card {
@@ -17,18 +17,21 @@ interface Subject {
   name: string
 }
 
+const PAIR_OPTIONS = [4, 6, 8, 10, 12]
+
 export default function Game() {
   const { user } = useAuthStore()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [selectedSubject, setSelectedSubject] = useState('')
   const [cards, setCards] = useState<Card[]>([])
-  const [flippedIds, setFlippedIds] = useState<string[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [startTime, setStartTime] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [matchedCount, setMatchedCount] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [showAll, setShowAll] = useState(true)
   const [gameOver, setGameOver] = useState(false)
+  const [pairCount, setPairCount] = useState(8)
+  const [showPairPicker, setShowPairPicker] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -36,11 +39,11 @@ export default function Game() {
     setSubjects(subs)
   }, [user])
 
-  const startGame = useCallback((subjectId: string) => {
+  const startGame = useCallback((subjectId: string, count: number) => {
     setSelectedSubject(subjectId)
     setLoading(true)
     try {
-      const data = getGameWords(Number(subjectId), 8)
+      const data = getGameWords(Number(subjectId), count)
       if (data.length) {
         const gameCards: Card[] = []
         data.forEach((w: Word, i: number) => {
@@ -59,16 +62,13 @@ export default function Game() {
             wordId: w.id,
           })
         })
-        // Shuffle
         const shuffled = gameCards.sort(() => Math.random() - 0.5)
         setCards(shuffled)
-        setFlippedIds([])
-        setShowAll(true)
+        setSelectedIds([])
         setStartTime(Date.now())
         setElapsed(0)
         setMatchedCount(0)
         setGameOver(false)
-        setTimeout(() => setShowAll(false), 2000)
       }
     } catch {}
     setLoading(false)
@@ -88,29 +88,28 @@ export default function Game() {
     }
   }, [matchedCount, cards.length])
 
-  const canFlip = (card: Card) => {
-    if (card.matched) return false
-    if (flippedIds.length >= 2) return false
-    if (flippedIds.includes(card.id)) return false
-    return true
-  }
+  const selectCard = (card: Card) => {
+    if (card.matched) return
+    if (selectedIds.includes(card.id)) return
 
-  const flip = (card: Card) => {
-    if (!canFlip(card)) return
-    setFlippedIds([...flippedIds, card.id])
-    if (flippedIds.length === 1) {
-      const first = cards.find(c => c.id === flippedIds[0])
-      if (!first) return
-      if (first.wordId === card.wordId) {
+    const newSelected = [...selectedIds, card.id]
+    setSelectedIds(newSelected)
+
+    if (newSelected.length === 2) {
+      const first = cards.find(c => c.id === newSelected[0])
+      const second = card
+      if (first && first.wordId === second.wordId) {
+        // 匹配成功
         setTimeout(() => {
           setCards(prev => prev.map(c =>
-            (c.id === first.id || c.id === card.id) ? { ...c, matched: true } : c
+            (c.id === first.id || c.id === second.id) ? { ...c, matched: true } : c
           ))
           setMatchedCount(m => m + 1)
-          setFlippedIds([])
-        }, 600)
+          setSelectedIds([])
+        }, 400)
       } else {
-        setTimeout(() => setFlippedIds([]), 1000)
+        // 不匹配，短暂高亮后取消
+        setTimeout(() => setSelectedIds([]), 600)
       }
     }
   }
@@ -122,29 +121,70 @@ export default function Game() {
   }
 
   const restart = () => {
-    if (selectedSubject) startGame(selectedSubject)
+    if (selectedSubject) startGame(selectedSubject, pairCount)
   }
 
-  const isFlipped = (id: string) => showAll || flippedIds.includes(id) || cards.find(c => c.id === id)?.matched
+  const getGridCols = (count: number) => {
+    const total = count * 2
+    if (total <= 8) return 'grid-cols-4'
+    if (total <= 16) return 'grid-cols-4'
+    return 'grid-cols-5'
+  }
 
   if (!selectedSubject) {
     return (
       <div className="max-w-2xl mx-auto text-center space-y-6 py-12">
         <div>
           <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>单词消消乐</h1>
-          <p className="text-slate-400 text-sm mt-1">配对英文和中文，边玩边记</p>
+          <p className="text-slate-400 text-sm mt-1">点击配对的英文和中文，全部消除即胜利</p>
         </div>
+
+        {/* Pair count picker */}
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => setShowPairPicker(!showPairPicker)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            配对数量：{pairCount} 对
+          </button>
+          <AnimatePresence>
+            {showPairPicker && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="flex gap-1.5 bg-white/[0.04] border border-white/[0.08] rounded-xl px-2 py-1.5"
+              >
+                {PAIR_OPTIONS.map(n => (
+                  <button
+                    key={n}
+                    onClick={() => { setPairCount(n); setShowPairPicker(false) }}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                      pairCount === n ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {subjects.map(s => (
             <button
               key={s.id}
-              onClick={() => startGame(String(s.id))}
+              onClick={() => startGame(String(s.id), pairCount)}
               className="bg-white/[0.03] border border-white/[0.06] rounded-xl py-3 px-4 text-sm text-slate-200 hover:border-blue-500/40 hover:bg-white/[0.06] transition-colors"
             >
               {s.name}
             </button>
           ))}
         </div>
+
+        {loading && <p className="text-slate-400 text-sm">加载中...</p>}
       </div>
     )
   }
@@ -167,7 +207,9 @@ export default function Game() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <p className="text-xs text-slate-500">点击英文和中文配对，全部消除即胜利</p>
+
+      <div className={`grid ${getGridCols(pairCount)} gap-2`}>
         {cards.map(card => (
           <motion.div
             key={card.id}
@@ -178,25 +220,22 @@ export default function Game() {
               opacity: card.matched ? 0 : 1,
             }}
             transition={{ duration: 0.3 }}
-            className={`aspect-square rounded-lg cursor-pointer perspective-800`}
-            onClick={() => flip(card)}
+            onClick={() => selectCard(card)}
+            className={`aspect-square rounded-lg cursor-pointer flex items-center justify-center p-1.5 border transition-all duration-200 ${
+              card.matched
+                ? 'pointer-events-none'
+                : selectedIds.includes(card.id)
+                  ? 'border-blue-400 bg-blue-500/20 scale-105'
+                  : 'border-white/[0.08] bg-[#0a1628] hover:border-blue-500/30'
+            }`}
           >
-            <motion.div
-              animate={{ rotateY: isFlipped(card.id) ? 180 : 0 }}
-              transition={{ duration: 0.4 }}
-              className="w-full h-full relative preserve-3d"
-            >
-              <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-white/[0.08] rounded-lg flex items-center justify-center">
-                <span className="text-xl font-bold text-blue-200/80">?</span>
-              </div>
-              <div
-                className="absolute inset-0 backface-hidden rotate-y-180 rounded-lg flex items-center justify-center p-1 bg-gradient-to-br from-[#0a1628] to-[#0f1d33] border border-white/[0.08]"
-              >
-                <span className={`text-center ${card.type === 'en' ? 'text-xs font-bold text-white' : 'text-[10px] text-slate-300'}`}>
-                  {card.content}
-                </span>
-              </div>
-            </motion.div>
+            <span className={`text-center leading-tight ${
+              card.type === 'en'
+                ? 'text-xs font-bold text-white'
+                : 'text-[11px] text-slate-300'
+            }`}>
+              {card.content}
+            </span>
           </motion.div>
         ))}
       </div>

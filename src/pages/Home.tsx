@@ -11,7 +11,7 @@ interface Stats {
   mastered: number
   streak: number
   subjects: { name: string; progress: number; color: string }[]
-  recentActivity: { word: string; subject: string; time: string; type: string }[]
+  recentActivity: { word: string; chinese: string; subject: string; time: string; type: string }[]
 }
 
 const subjectColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
@@ -156,11 +156,16 @@ export default function Home() {
           ) : (
             <div className="space-y-3">
               {stats.recentActivity.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 text-xs">
+                <div key={i} className="flex items-center gap-3 text-xs py-1.5">
                   <Clock className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
-                  <span className="text-white font-medium">{a.word}</span>
-                  <span className="text-slate-500">{a.subject}</span>
-                  <span className="text-slate-600 ml-auto">{a.time}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-medium">{a.word}</span>
+                      <span className="text-slate-400">{a.chinese}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-600">{a.subject}</span>
+                  </div>
+                  <span className="text-slate-600 flex-shrink-0">{a.time}</span>
                 </div>
               ))}
             </div>
