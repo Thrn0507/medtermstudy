@@ -27,37 +27,10 @@ const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', 
 
 function ContributionGraph({ data }: { data: { date: string; count: number }[] }) {
   const today = new Date()
-  const grid: { date: Date; count: number }[][] = []
-  let week: (typeof grid)[0][number][] = []
-
-  const start = new Date(today)
-  start.setDate(today.getDate() - 90)
-  const startDay = start.getDay() || 7
-
-  for (let i = 1; i < startDay; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() - (startDay - i))
-    const count = data.find(x => x.date === d.toISOString().slice(0, 10))?.count || 0
-    week.push({ date: d, count })
-  }
-
-  let current = new Date(start)
-  while (current <= today) {
-    if (week.length === 7) {
-      grid.push(week)
-      week = []
-    }
-    const count = data.find(x => x.date === current.toISOString().slice(0, 10))?.count || 0
-    week.push({ date: current, count })
-    current = new Date(current)
-    current.setDate(current.getDate() + 1)
-  }
-  while (week.length < 7 && week.length > 0) {
-    const d = new Date(week[week.length - 1].date)
-    d.setDate(d.getDate() + 1)
-    week.push({ date: d, count: 0 })
-  }
-  if (week.length === 7) grid.push(week)
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDayOfWeek = new Date(year, month, 1).getDay() || 7
 
   const getColor = (count: number) => {
     if (count === 0) return 'rgba(255,255,255,0.04)'
@@ -72,41 +45,47 @@ function ContributionGraph({ data }: { data: { date: string; count: number }[] }
     return 'text-slate-500'
   }
 
-  const isToday = (d: Date) => {
-    return d.toDateString() === today.toDateString()
+  const isToday = (d: number) => d === today.getDate()
+
+  const cells: { day: number; count: number }[] = []
+  for (let i = 1; i < firstDayOfWeek; i++) {
+    cells.push({ day: 0, count: -1 })
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const count = data.find(x => x.date === dateStr)?.count || 0
+    cells.push({ day: d, count })
   }
 
   return (
     <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
       <h3 className="text-sm font-medium text-white mb-4">学习日历</h3>
-      <div className="overflow-x-auto">
-        {/* 星期表头 */}
-        <div className="flex gap-0.5 mb-1">
-          <div className="w-8" />
-          {weekDays.map(d => (
-            <div key={d} className="w-7 h-5 flex items-center justify-center">
-              <span className="text-[10px] text-slate-500">{d}</span>
-            </div>
-          ))}
-        </div>
-        {/* 每周一行 */}
-        {grid.map((week, wi) => (
-          <div key={wi} className="flex gap-0.5 mb-0.5">
-            <div className="w-8 flex items-center justify-end pr-1">
-              {week[0].date.getDate() <= 7 && (
-                <span className="text-[10px] text-slate-500">{months[week[0].date.getMonth()]}</span>
-              )}
-            </div>
-            {week.map((cell, di) => (
+      <div className="text-center mb-3">
+        <span className="text-white font-medium">{year}年{month + 1}月</span>
+      </div>
+      {/* 星期表头 */}
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {weekDays.map(d => (
+          <div key={d} className="h-6 flex items-center justify-center">
+            <span className="text-xs text-slate-500">{d}</span>
+          </div>
+        ))}
+      </div>
+      {/* 日期网格 */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, i) => (
+          <div key={i} className="aspect-square flex items-center justify-center">
+            {cell.day > 0 ? (
               <div
-                key={di}
-                className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-medium ${getTextColor(cell.count)} ${isToday(cell.date) ? 'ring-1 ring-blue-400' : ''}`}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium ${getTextColor(cell.count)} ${isToday(cell.day) ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-[#0a1628]' : ''}`}
                 style={{ backgroundColor: getColor(cell.count) }}
-                title={`${cell.date.getMonth() + 1}月${cell.date.getDate()}日 星期${weekDays[di]}: ${cell.count} 个单词`}
+                title={`${month + 1}月${cell.day}日 星期${weekDays[(i % 7)]}: ${cell.count} 个单词`}
               >
-                {cell.date.getDate()}
+                {cell.day}
               </div>
-            ))}
+            ) : (
+              <div className="w-8 h-8" />
+            )}
           </div>
         ))}
       </div>
