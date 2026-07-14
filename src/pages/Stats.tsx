@@ -68,7 +68,7 @@ function ContributionGraph({ data }: { data: { date: string; count: number }[] }
 
   const getTextColor = (count: number) => {
     if (count >= 15) return 'text-white'
-    if (count >= 5) return 'text-slate-300'
+    if (count >= 5) return 'text-slate-200'
     return 'text-slate-500'
   }
 
@@ -80,57 +80,35 @@ function ContributionGraph({ data }: { data: { date: string; count: number }[] }
     <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
       <h3 className="text-sm font-medium text-white mb-4">学习日历</h3>
       <div className="overflow-x-auto">
-        <div className="inline-flex gap-0.5">
-          {/* 星期列 */}
-          <div className="flex flex-col gap-0.5 mr-1">
-            <div className="w-7 h-7" />
-            {weekDays.map((d, i) => (
-              <div key={i} className="w-7 h-7 flex items-center justify-center">
-                <span className="text-[10px] text-slate-500">{d}</span>
-              </div>
-            ))}
-          </div>
-          {/* 日期网格 - 按星期行排列 */}
-          {Array.from({ length: 7 }, (_, dayOfWeek) => (
-            <div key={dayOfWeek} className="flex flex-col gap-0.5">
-              {/* 月份标签行 */}
-              <div className="w-7 h-7 relative">
-                {grid.map((week, wi) => {
-                  const cell = week[dayOfWeek]
-                  if (!cell) return null
-                  if (cell.date.getDate() === 1 || (wi === 0 && dayOfWeek === 0)) {
-                    return (
-                      <span
-                        key={wi}
-                        className="absolute text-[10px] text-slate-500 whitespace-nowrap"
-                        style={{ left: `${wi * 30}px`, top: 0 }}
-                      >
-                        {months[cell.date.getMonth()]}
-                      </span>
-                    )
-                  }
-                  return null
-                })}
-              </div>
-              {/* 日期格子 */}
-              {grid.map((week, wi) => {
-                const cell = week[dayOfWeek]
-                if (!cell) return <div key={wi} className="w-7 h-7" />
-                const dateNum = cell.date.getDate()
-                return (
-                  <div
-                    key={wi}
-                    className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-medium transition-colors ${getTextColor(cell.count)} ${isToday(cell.date) ? 'ring-1 ring-blue-400' : ''}`}
-                    style={{ backgroundColor: getColor(cell.count) }}
-                    title={`${cell.date.toLocaleDateString()} 星期${weekDays[cell.date.getDay() === 0 ? 6 : cell.date.getDay() - 1]}: ${cell.count} 个单词`}
-                  >
-                    {dateNum}
-                  </div>
-                )
-              })}
+        {/* 星期表头 */}
+        <div className="flex gap-0.5 mb-1">
+          <div className="w-8" />
+          {weekDays.map(d => (
+            <div key={d} className="w-7 h-5 flex items-center justify-center">
+              <span className="text-[10px] text-slate-500">{d}</span>
             </div>
           ))}
         </div>
+        {/* 每周一行 */}
+        {grid.map((week, wi) => (
+          <div key={wi} className="flex gap-0.5 mb-0.5">
+            <div className="w-8 flex items-center justify-end pr-1">
+              {week[0].date.getDate() <= 7 && (
+                <span className="text-[10px] text-slate-500">{months[week[0].date.getMonth()]}</span>
+              )}
+            </div>
+            {week.map((cell, di) => (
+              <div
+                key={di}
+                className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-medium ${getTextColor(cell.count)} ${isToday(cell.date) ? 'ring-1 ring-blue-400' : ''}`}
+                style={{ backgroundColor: getColor(cell.count) }}
+                title={`${cell.date.getMonth() + 1}月${cell.date.getDate()}日 星期${weekDays[di]}: ${cell.count} 个单词`}
+              >
+                {cell.date.getDate()}
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
       <div className="flex items-center justify-end gap-2 mt-3">
         <span className="text-[10px] text-slate-500">少</span>
