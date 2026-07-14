@@ -6,8 +6,10 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const DB_DIR = path.join(__dirname, 'data')
+const isVercel = !!process.env.VERCEL
+const DB_DIR = isVercel ? '/tmp' : path.join(__dirname, 'data')
 const DB_PATH = path.join(DB_DIR, 'medterm.db')
+const SEED_DB_PATH = path.join(__dirname, 'data', 'medterm.db')
 
 let db: Database | null = null
 
@@ -32,6 +34,9 @@ export async function initDatabase(): Promise<Database> {
 
   if (fs.existsSync(DB_PATH)) {
     const buffer = fs.readFileSync(DB_PATH)
+    db = new SQL.Database(buffer)
+  } else if (isVercel && fs.existsSync(SEED_DB_PATH)) {
+    const buffer = fs.readFileSync(SEED_DB_PATH)
     db = new SQL.Database(buffer)
   } else {
     db = new SQL.Database()
