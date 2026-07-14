@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { Search as SearchIcon, ChevronDown, ChevronUp } from 'lucide-react'
+import { searchWords as searchLocalWords } from '@/lib/localData'
+
 function debounce<T extends (...args: any[]) => any>(fn: T, ms: number) {
   let timer: ReturnType<typeof setTimeout>
   const debounced = (...args: Parameters<T>) => {
@@ -12,7 +14,7 @@ function debounce<T extends (...args: any[]) => any>(fn: T, ms: number) {
 }
 
 interface Word {
-  id: string
+  id: number
   english: string
   chinese: string
   definition: string
@@ -25,32 +27,29 @@ interface Word {
 }
 
 export default function Search() {
-  const { token } = useAuthStore()
+  const { user } = useAuthStore()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Word[]>([])
   const [loading, setLoading] = useState(false)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [relatedRoot, setRelatedRoot] = useState<string | null>(null)
 
   const debouncedSearch = useMemo(() =>
-    debounce(async (q: string) => {
+    debounce((q: string) => {
       if (!q.trim()) {
         setResults([])
         setLoading(false)
         return
       }
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const data = await res.json()
-        if (data.success) setResults(data.data)
+        const data = searchLocalWords(q)
+        setResults(data)
       } catch {
         setResults([])
       }
       setLoading(false)
     }, 300)
-  , [token])
+  , [])
 
   useEffect(() => {
     if (!query.trim()) {

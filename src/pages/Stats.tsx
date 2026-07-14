@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 import { Trophy, Target, BookOpen } from 'lucide-react'
+import { getOverviewStats, getSubjectStats, getDailyStats } from '@/lib/localData'
 
 interface SubjectStat {
   name: string
@@ -25,14 +26,13 @@ const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
 
 function ContributionGraph({ data }: { data: { date: string; count: number }[] }) {
-  // Last 3 months
   const today = new Date()
   const grid: { date: Date; count: number }[][] = []
   let week: (typeof grid)[0][number][] = []
 
   const start = new Date(today)
   start.setDate(today.getDate() - 90)
-  const startDay = start.getDay() || 7 // 1 is Mon -> 0 for 1=Monday
+  const startDay = start.getDay() || 7
 
   for (let i = 1; i < startDay; i++) {
     const d = new Date(start)
@@ -108,28 +108,20 @@ function ContributionGraph({ data }: { data: { date: string; count: number }[] }
 }
 
 export default function Stats() {
-  const { token } = useAuthStore()
+  const { user } = useAuthStore()
   const [overview, setOverview] = useState<Overview>({ total: 0, mastered: 0, rate: 0, trend: [] })
   const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([])
   const [daily, setDaily] = useState<DailyStat[]>([])
 
   useEffect(() => {
-    ;(async () => {
-      const [oRes, sRes, dRes] = await Promise.all([
-        fetch('/api/stats/overview', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/stats/subjects', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/stats/daily', { headers: { Authorization: `Bearer ${token}` } }),
-      ])
-      const [oData, sData, dData] = await Promise.all([
-        oRes.json(),
-        sRes.json(),
-        dRes.json(),
-      ])
-      if (oData.success) setOverview(oData.data)
-      if (sData.success) setSubjectStats(sData.data)
-      if (dData.success) setDaily(dData.data)
-    })().catch(() => {})
-  }, [token])
+    if (!user) return
+    const o = getOverviewStats(user.id)
+    const s = getSubjectStats(user.id)
+    const d = getDailyStats(user.id)
+    setOverview(o)
+    setSubjectStats(s)
+    setDaily(d)
+  }, [user])
 
   const chartData = subjectStats.map(s => ({
     name: s.name.length > 6 ? s.name.slice(0, 6) + '...' : s.name,

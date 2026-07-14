@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { loginUser, registerUser } from '@/lib/localData'
 
 interface User {
   id: string
@@ -25,16 +26,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ loading: true })
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        set({ user: data.user, token: data.token, isAuthenticated: true, loading: false })
+      const result = loginUser(email, password)
+      if (result.success && result.user) {
+        const token = result.user.id
+        localStorage.setItem('token', token)
+        localStorage.setItem('user', JSON.stringify(result.user))
+        set({ user: result.user, token, isAuthenticated: true, loading: false })
         return true
       }
       set({ loading: false })
@@ -48,16 +45,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (email: string, password: string) => {
     set({ loading: true })
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        set({ user: data.user, token: data.token, isAuthenticated: true, loading: false })
+      const result = registerUser(email, password)
+      if (result.success && result.user) {
+        const token = result.user.id
+        localStorage.setItem('token', token)
+        localStorage.setItem('user', JSON.stringify(result.user))
+        set({ user: result.user, token, isAuthenticated: true, loading: false })
         return true
       }
       set({ loading: false })

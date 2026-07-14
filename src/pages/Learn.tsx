@@ -2,24 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
 import { Check, XCircle, ChevronDown, ChevronUp, Volume2 } from 'lucide-react'
-
-interface Word {
-  id: string
-  english: string
-  chinese: string
-  definition: string
-  phonetic: string
-  example: string
-  exampleTranslation: string
-}
+import { getSubjectsForUser, getWordsBySubject, updateProgress, Word } from '@/lib/localData'
 
 interface Subject {
-  id: string
+  id: number
   name: string
 }
 
 export default function Learn() {
-  const { token } = useAuthStore()
+  const { user } = useAuthStore()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [selectedSubject, setSelectedSubject] = useState('')
   const [words, setWords] = useState<Word[]>([])
@@ -30,39 +21,31 @@ export default function Learn() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/subjects', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(d => { if (d.success) setSubjects(d.data) }).catch(() => {})
-  }, [token])
+    if (!user) return
+    const subs = getSubjectsForUser(user.id).map(s => ({ id: s.id, name: s.name }))
+    setSubjects(subs)
+  }, [user])
 
-  const fetchWords = useCallback(async (subjectId: string) => {
+  const fetchWords = useCallback((subjectId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/words?subjectId=${subjectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      if (data.success) {
-        setWords(data.data)
-        setCurrentIndex(0)
-        setFlipped(false)
-        setShowExample(false)
-        setDone(false)
-      }
+      const data = getWordsBySubject(Number(subjectId))
+      setWords(data)
+      setCurrentIndex(0)
+      setFlipped(false)
+      setShowExample(false)
+      setDone(false)
     } catch {}
     setLoading(false)
-  }, [token])
+  }, [])
 
   useEffect(() => {
     if (selectedSubject) fetchWords(selectedSubject)
   }, [selectedSubject, fetchWords])
 
-  const handleResponse = async (known: boolean) => {
-    if (words[currentIndex]) {
-      fetch('/api/learn/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ wordId: words[currentIndex].id, known }),
-      }).catch(() => {})
+  const handleResponse = (known: boolean) => {
+    if (user && words[currentIndex]) {
+      updateProgress(user.id, words[currentIndex].id, known ? 'known' : 'unknown')
     }
     if (currentIndex + 1 < words.length) {
       setFlipped(false)

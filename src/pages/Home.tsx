@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
 import { BookOpen, Brain, Flame, Play, Gamepad2, Search, Clock } from 'lucide-react'
+import { getProgressForUser } from '@/lib/localData'
 import ReviewModal from '@/components/ReviewModal'
 
 interface Stats {
@@ -32,7 +33,7 @@ function RingProgress({ progress, color, size = 80, strokeWidth = 6 }: { progres
 }
 
 export default function Home() {
-  const { token } = useAuthStore()
+  const { user } = useAuthStore()
   const navigate = useNavigate()
   const [showReview, setShowReview] = useState(false)
   const [stats, setStats] = useState<Stats>({
@@ -41,11 +42,16 @@ export default function Home() {
   })
 
   useEffect(() => {
-    fetch('/api/stats/overview', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(d => {
-        if (d.success) setStats(d.data)
-      }).catch(() => {})
-  }, [token])
+    if (!user) return
+    const progress = getProgressForUser(user.id)
+    setStats({
+      todayNew: progress.totalWords - progress.masteredWords,
+      mastered: progress.masteredWords,
+      streak: progress.streak,
+      subjects: progress.subjectProgress,
+      recentActivity: progress.recentActivity,
+    })
+  }, [user])
 
   useEffect(() => {
     const reviewed = localStorage.getItem('reviewed_today')

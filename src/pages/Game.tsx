@@ -2,22 +2,23 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
 import { RotateCcw, Trophy, Timer } from 'lucide-react'
+import { getSubjectsForUser, getGameWords, Word } from '@/lib/localData'
 
 interface Card {
   id: string
   content: string
   matched: boolean
   type: 'en' | 'zh'
-  wordId: string
+  wordId: number
 }
 
 interface Subject {
-  id: string
+  id: number
   name: string
 }
 
 export default function Game() {
-  const { token } = useAuthStore()
+  const { user } = useAuthStore()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [selectedSubject, setSelectedSubject] = useState('')
   const [cards, setCards] = useState<Card[]>([])
@@ -30,21 +31,19 @@ export default function Game() {
   const [gameOver, setGameOver] = useState(false)
 
   useEffect(() => {
-    fetch('/api/subjects', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(d => { if (d.success) setSubjects(d.data) }).catch(() => {})
-  }, [token])
+    if (!user) return
+    const subs = getSubjectsForUser(user.id).map(s => ({ id: s.id, name: s.name }))
+    setSubjects(subs)
+  }, [user])
 
-  const startGame = useCallback(async (subjectId: string) => {
+  const startGame = useCallback((subjectId: string) => {
     setSelectedSubject(subjectId)
     setLoading(true)
     try {
-      const res = await fetch(`/api/game/words?subjectId=${subjectId}&count=8`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      if (data.success && data.data.length) {
+      const data = getGameWords(Number(subjectId), 8)
+      if (data.length) {
         const gameCards: Card[] = []
-        data.data.forEach((w: any, i: number) => {
+        data.forEach((w: Word, i: number) => {
           gameCards.push({
             id: `${w.id}-en-${i}`,
             content: w.english,
@@ -73,7 +72,7 @@ export default function Game() {
       }
     } catch {}
     setLoading(false)
-  }, [token])
+  }, [])
 
   useEffect(() => {
     if (!startTime || gameOver) return
@@ -83,15 +82,11 @@ export default function Game() {
     return () => clearInterval(timer)
   }, [startTime, gameOver])
 
-  const checkComplete = () => {
-    if (matchedCount * 2 === cards.length) {
+  useEffect(() => {
+    if (matchedCount > 0 && matchedCount * 2 === cards.length) {
       setGameOver(true)
     }
-  }
-
-  useEffect(() => {
-    if (matchedCount > 0) checkComplete()
-  }, [matchedCount])
+  }, [matchedCount, cards.length])
 
   const canFlip = (card: Card) => {
     if (card.matched) return false
@@ -143,7 +138,7 @@ export default function Game() {
           {subjects.map(s => (
             <button
               key={s.id}
-              onClick={() => startGame(s.id)}
+              onClick={() => startGame(String(s.id))}
               className="bg-white/[0.03] border border-white/[0.06] rounded-xl py-3 px-4 text-sm text-slate-200 hover:border-blue-500/40 hover:bg-white/[0.06] transition-colors"
             >
               {s.name}
@@ -159,7 +154,7 @@ export default function Game() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">单词消消乐</h1>
-          <p className="text-xs text-slate-500">{subjects.find(s => s.id === selectedSubject)?.name}</p>
+          <p className="text-xs text-slate-500">{subjects.find(s => String(s.id) === selectedSubject)?.name}</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-sm text-slate-400">
@@ -207,7 +202,7 @@ export default function Game() {
       </div>
 
       <p className="text-center text-xs text-slate-500">
-        已配对 {matchedCount}/8 对
+        已配对 {matchedCount}/{cards.length / 2} 对
       </p>
 
       <AnimatePresence>

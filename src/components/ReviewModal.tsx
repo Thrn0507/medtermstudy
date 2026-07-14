@@ -2,44 +2,43 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
 import { X, Check, XCircle } from 'lucide-react'
+import { getReviewWords, updateProgress } from '@/lib/localData'
 
 interface ReviewWord {
-  id: string
+  id: number
   english: string
   chinese: string
   definition: string
 }
 
 export default function ReviewModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { token } = useAuthStore()
+  const { user } = useAuthStore()
   const [words, setWords] = useState<ReviewWord[]>([])
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [done, setDone] = useState(false)
 
   useEffect(() => {
-    if (open) {
-      fetch('/api/review/today', { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.json()).then(d => {
-          if (d.success && d.data?.length) {
-            setWords(d.data)
-            setIndex(0)
-            setFlipped(false)
-            setDone(false)
-          } else {
-            onClose()
-          }
-        }).catch(() => onClose())
+    if (open && user) {
+      try {
+        const data = getReviewWords(user.id)
+        if (data.length) {
+          setWords(data.map(w => ({ id: w.id, english: w.english, chinese: w.chinese, definition: w.definition })))
+          setIndex(0)
+          setFlipped(false)
+          setDone(false)
+        } else {
+          onClose()
+        }
+      } catch {
+        onClose()
+      }
     }
-  }, [open, token, onClose])
+  }, [open, user, onClose])
 
-  const handleResponse = async (known: boolean) => {
-    if (words[index]) {
-      fetch('/api/review/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ wordId: words[index].id, known }),
-      }).catch(() => {})
+  const handleResponse = (known: boolean) => {
+    if (user && words[index]) {
+      updateProgress(user.id, words[index].id, known ? 'known' : 'unknown')
     }
     if (index + 1 < words.length) {
       setFlipped(false)

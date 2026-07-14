@@ -2,32 +2,22 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
 import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope } from 'lucide-react'
+import {
+  getSubjectsForUser, addSubject as addLocalSubject, deleteSubject as deleteLocalSubject,
+  getWordsBySubject, addWord as addLocalWord, deleteWord as deleteLocalWord,
+  Subject, Word,
+} from '@/lib/localData'
 
-interface Subject {
-  id: string
-  name: string
+interface SubjectWithCount extends Subject {
   wordCount: number
-  isPreset: boolean
-}
-
-interface Word {
-  id: string
-  english: string
-  chinese: string
-  phonetic: string
-  definition: string
-  example: string
-  exampleTranslation: string
-  root: string
-  rootMeaning: string
 }
 
 const presetIcons = [BookOpen, Library, Stethoscope, Microscope]
 
 export default function Subjects() {
-  const { token } = useAuthStore()
-  const [subjects, setSubjects] = useState<Subject[]>([])
-  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
+  const { user } = useAuthStore()
+  const [subjects, setSubjects] = useState<SubjectWithCount[]>([])
+  const [selectedSubject, setSelectedSubject] = useState<SubjectWithCount | null>(null)
   const [words, setWords] = useState<Word[]>([])
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [addWordModalOpen, setAddWordModalOpen] = useState(false)
@@ -35,87 +25,68 @@ export default function Subjects() {
 
   const [newSubjectName, setNewSubjectName] = useState('')
   const [newWord, setNewWord] = useState<Partial<Word>>({
-    english: '', chinese: '', phonetic: '', definition: '', example: '', exampleTranslation: '', root: '', rootMeaning: '',
+    english: '', chinese: '', pronunciation: '', definition: '', exampleSentence: '', exampleTranslation: '', root: '', rootMeaning: '',
   })
 
-  const loadSubjects = async () => {
-    const res = await fetch('/api/subjects', { headers: { Authorization: `Bearer ${token}` } })
-    const data = await res.json()
-    if (data.success) setSubjects(data.data)
+  const loadSubjects = () => {
+    if (!user) return
+    const subs = getSubjectsForUser(user.id)
+    const withCounts: SubjectWithCount[] = subs.map(s => {
+      const words = getWordsBySubject(s.id)
+      return { ...s, wordCount: words.length }
+    })
+    setSubjects(withCounts)
   }
 
   useEffect(() => {
     loadSubjects()
-  }, [token])
+  }, [user])
 
-  const loadWords = async (subject: Subject) => {
+  const loadWords = (subject: SubjectWithCount) => {
     setSelectedSubject(subject)
-    const res = await fetch(`/api/words/list?subjectId=${subject.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const data = await res.json()
-    if (data.success) setWords(data.data)
+    const data = getWordsBySubject(subject.id)
+    setWords(data)
   }
 
-  const addSubject = async () => {
-    if (!newSubjectName.trim()) return
+  const addSubject = () => {
+    if (!user || !newSubjectName.trim()) return
     setLoading(true)
     try {
-      const res = await fetch('/api/subjects/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: newSubjectName }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        await loadSubjects()
-        setNewSubjectName('')
-        setAddModalOpen(false)
-      }
+      addLocalSubject(user.id, newSubjectName, '📚')
+      loadSubjects()
+      setNewSubjectName('')
+      setAddModalOpen(false)
     } catch {}
     setLoading(false)
   }
 
-  const deleteSubject = async (id: string) => {
-    if (!confirm('确定删除该学科？所有单词也会被删除。')) return
+  const deleteSubject = (id: number) => {
+    if (!user || !confirm('确定删除该学科？所有单词也会被删除。')) return
     try {
-      await fetch(`/api/subjects/delete/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      await loadSubjects()
+      deleteLocalSubject(user.id, id)
+      loadSubjects()
       if (selectedSubject?.id === id) setSelectedSubject(null)
     } catch {}
   }
 
-  const addWord = async () => {
-    if (!selectedSubject || !newWord.english || !newWord.chinese) return
+  const addWord = () => {
+    if (!user || !selectedSubject || !newWord.english || !newWord.chinese) return
     setLoading(true)
     try {
-      const res = await fetch('/api/words/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...newWord, subjectId: selectedSubject.id }),
+      const added = addLocalWord(selectedSubject.id, newWord as Omit<Word, 'id' | 'subjectId' | 'phonetic' | 'example'>)
+      setWords([...words, added])
+      setNewWord({
+        english: '', chinese: '', pronunciation: '', definition: '', exampleSentence: '', exampleTranslation: '', root: '', rootMeaning: '',
       })
-      const data = await res.json()
-      if (data.success) {
-        setWords([...words, data.data])
-        setNewWord({
-          english: '', chinese: '', phonetic: '', definition: '', example: '', exampleTranslation: '', root: '', rootMeaning: '',
-        })
-        setAddWordModalOpen(false)
-      }
+      setAddWordModalOpen(false)
     } catch {}
     setLoading(false)
   }
 
-  const deleteWord = async (id: string) => {
+  const deleteWord = (id: number) => {
     if (!confirm('确定删除这个单词？')) return
     try {
-      await fetch(`/api/words/delete/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      deleteLocalWord(id)
       setWords(words.filter(w => w.id !== id))
     } catch {}
   }
@@ -130,7 +101,7 @@ export default function Subjects() {
       {/* Subject grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {subjects.map(subject => {
-          const Icon = presetIcons[subject.id.charCodeAt(0) % presetIcons.length]
+          const Icon = presetIcons[subject.id % presetIcons.length]
           return (
             <div
               key={subject.id}
@@ -288,8 +259,8 @@ export default function Subjects() {
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">音标</label>
                   <input
-                    value={newWord.phonetic}
-                    onChange={e => setNewWord({ ...newWord, phonetic: e.target.value })}
+                    value={newWord.pronunciation}
+                    onChange={e => setNewWord({ ...newWord, pronunciation: e.target.value })}
                     className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white"
                     placeholder="/ˌæpəˈdætəs/"
                   />
@@ -324,8 +295,8 @@ export default function Subjects() {
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">医学例句</label>
                   <textarea
-                    value={newWord.example}
-                    onChange={e => setNewWord({ ...newWord, example: e.target.value })}
+                    value={newWord.exampleSentence}
+                    onChange={e => setNewWord({ ...newWord, exampleSentence: e.target.value })}
                     rows={2}
                     className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white resize-none"
                   />
