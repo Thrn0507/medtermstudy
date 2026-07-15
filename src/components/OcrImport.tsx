@@ -7,6 +7,7 @@ interface TextImportResult {
   english: string
   chinese: string
   pronunciation: string
+  definition: string
 }
 
 interface Props {
@@ -21,7 +22,7 @@ export default function TextImport({ onResult, onClose }: Props) {
   const [fetchingPhonetics, setFetchingPhonetics] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // 解析文本提取英文-音标-中文
+  // 解析文本提取英文-音标-中文-释义
   const parseText = (input: string): TextImportResult[] => {
     const lines = input
       .split('\n')
@@ -32,44 +33,64 @@ export default function TextImport({ onResult, onClose }: Props) {
     const pairs: TextImportResult[] = []
     let pending: { english: string; pronunciation: string } | null = null
 
+    const splitChineseAndDef = (text: string): { chinese: string; definition: string } => {
+      const pipeIdx = text.indexOf('|')
+      if (pipeIdx > 0) {
+        return {
+          chinese: text.slice(0, pipeIdx).trim(),
+          definition: text.slice(pipeIdx + 1).trim(),
+        }
+      }
+      return { chinese: text, definition: '' }
+    }
+
+    const cleanChinese = (s: string) => s.replace(/[^a-zA-Z\u4e00-\u9fff\s|]/g, '').trim()
+
     for (const line of lines) {
       let pronunciation = ''
       let english = ''
       let chinese = ''
+      let definition = ''
 
-      // 格式1: 英文 /音标/ 中文
+      // 格式1: 英文 /音标/ 中文 | 释义
       const slashMatch = line.match(/^([a-zA-Z\s\-]+)\s+([\/\[]([^\]\/]+)[\/\]])\s+(.+)$/)
       if (slashMatch) {
         english = slashMatch[1].trim()
         pronunciation = slashMatch[2].trim()
-        chinese = slashMatch[4].trim().replace(/[^a-zA-Z\u4e00-\u9fff\s]/g, '').trim()
+        const cd = splitChineseAndDef(cleanChinese(slashMatch[4]))
+        chinese = cd.chinese
+        definition = cd.definition
         if (english.length > 1 && chinese.length > 0) {
-          pairs.push({ english, chinese, pronunciation })
+          pairs.push({ english, chinese, pronunciation, definition })
           pending = null
           continue
         }
       }
 
-      // 格式2: 英文 - 音标 - 中文
+      // 格式2: 英文 - 音标 - 中文 | 释义
       const dashMatch = line.match(/^([a-zA-Z\s\-]+)\s+[-–]\s+([^\s\-]+)\s+[-–]\s+(.+)$/)
       if (dashMatch) {
         english = dashMatch[1].trim()
         pronunciation = dashMatch[2].trim()
-        chinese = dashMatch[3].trim().replace(/[^a-zA-Z\u4e00-\u9fff\s]/g, '').trim()
+        const cd = splitChineseAndDef(cleanChinese(dashMatch[3]))
+        chinese = cd.chinese
+        definition = cd.definition
         if (english.length > 1 && chinese.length > 0) {
-          pairs.push({ english, chinese, pronunciation })
+          pairs.push({ english, chinese, pronunciation, definition })
           pending = null
           continue
         }
       }
 
-      // 格式3: 英文 中文（无音标）
+      // 格式3: 英文 中文 | 释义（无音标）
       const simpleMatch = line.match(/^([a-zA-Z\s\-]+)[\s\/\-：:]+(.+)$/)
       if (simpleMatch) {
         english = simpleMatch[1].trim()
-        chinese = simpleMatch[2].trim().replace(/[^a-zA-Z\u4e00-\u9fff\s]/g, '').trim()
+        const cd = splitChineseAndDef(cleanChinese(simpleMatch[2]))
+        chinese = cd.chinese
+        definition = cd.definition
         if (english.length > 1 && chinese.length > 0 && /[a-zA-Z]/.test(english) && /[\u4e00-\u9fff]/.test(chinese)) {
-          pairs.push({ english, chinese, pronunciation: '' })
+          pairs.push({ english, chinese, pronunciation: '', definition })
           pending = null
           continue
         }
@@ -88,12 +109,14 @@ export default function TextImport({ onResult, onClose }: Props) {
         continue
       }
 
-      // 中文行，配对上一行英文
+      // 中文行（可含|释义），配对上一行英文
       if (pending && /[\u4e00-\u9fff]/.test(line)) {
+        const cd = splitChineseAndDef(cleanChinese(line))
         pairs.push({
           english: pending.english,
           pronunciation: pending.pronunciation,
-          chinese: line.trim().replace(/[^a-zA-Z\u4e00-\u9fff\s]/g, '').trim(),
+          chinese: cd.chinese,
+          definition: cd.definition,
         })
         pending = null
         continue
@@ -205,16 +228,13 @@ export default function TextImport({ onResult, onClose }: Props) {
               value={text}
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder={`格式示例（每行一对）：
-abdominal 腹部
-aorta /eɪˈɔːrtə/ 主动脉
+abdominal 腹部 | 位于腹部的
+aorta /eɪˈɔːrtə/ 主动脉 | 人体最大的动脉
 artery 动脉
 brachial - /ˈbreɪkiəl/ - 臂的
 
-或英文中文分行：
-abdominal
-腹部
-aorta
-主动脉`}
+用 | 分隔中文和释义（可选）
+英文和中文也可分行输入`}
               className="w-full h-32 px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-slate-200 text-sm resize-none focus:outline-none focus:border-blue-500/50"
             />
           </div>
@@ -266,6 +286,9 @@ aorta
                         )}
                         <span className="text-xs text-slate-500 mx-2">—</span>
                         <span className="text-sm text-slate-300">{r.chinese}</span>
+                        {r.definition && (
+                          <span className="text-xs text-slate-500 ml-1.5 italic">({r.definition})</span>
+                        )}
                       </div>
                     </label>
                   ))}

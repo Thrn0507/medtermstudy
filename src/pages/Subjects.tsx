@@ -110,7 +110,7 @@ export default function Subjects() {
     } catch {}
   }
 
-  const batchImportFromOcr = (ocrResults: { english: string; chinese: string; pronunciation?: string }[]) => {
+  const batchImportFromOcr = (ocrResults: { english: string; chinese: string; pronunciation?: string; definition?: string }[]) => {
     if (!user || !selectedSubject) return
     const newWords: Word[] = []
     for (const r of ocrResults) {
@@ -119,7 +119,7 @@ export default function Subjects() {
           english: r.english,
           chinese: r.chinese,
           pronunciation: r.pronunciation || '',
-          definition: '',
+          definition: r.definition || '',
           exampleSentence: '',
           exampleTranslation: '',
           root: '',
