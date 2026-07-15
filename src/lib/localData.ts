@@ -311,6 +311,14 @@ export function getWordsBySubject(subjectId: number): Word[] {
   return words.filter(w => w.subjectId === subjectId).map(toWord)
 }
 
+export function getUnmasteredWordsBySubject(subjectId: number, userId: string): Word[] {
+  initialize()
+  const words = getWords().filter(w => w.subjectId === subjectId)
+  const progress = getProgress().filter(p => p.userId === userId)
+  const masteredIds = new Set(progress.filter(p => p.status === 'known').map(p => p.wordId))
+  return words.filter(w => !masteredIds.has(w.id)).map(toWord)
+}
+
 export function addWord(subjectId: number, word: Omit<Word, 'id' | 'subjectId' | 'phonetic' | 'example'>): Word {
   initialize()
   const words = getWords()

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
 import { Check, XCircle, ArrowRight, Volume2, RotateCcw, Settings2 } from 'lucide-react'
-import { getSubjectsForUser, getWordsBySubject, updateProgress, Word, getDailyLimit, setDailyLimit, getStudiedToday, markStudiedToday, getRemainingToday } from '@/lib/localData'
+import { getSubjectsForUser, getWordsBySubject, getUnmasteredWordsBySubject, updateProgress, Word, getDailyLimit, setDailyLimit, getStudiedToday, markStudiedToday, getRemainingToday } from '@/lib/localData'
 import { speakWord } from '@/lib/pronunciation'
 
 interface Subject {
@@ -15,6 +15,7 @@ export default function Learn() {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [selectedSubject, setSelectedSubject] = useState('')
   const [allWords, setAllWords] = useState<Word[]>([])
+  const [unmasteredCount, setUnmasteredCount] = useState(0)
   const [words, setWords] = useState<Word[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
@@ -37,37 +38,40 @@ export default function Learn() {
   const fetchWords = useCallback((subjectId: string) => {
     setLoading(true)
     try {
-      const data = getWordsBySubject(Number(subjectId))
+      const allData = getWordsBySubject(Number(subjectId))
+      const unmastered = getUnmasteredWordsBySubject(Number(subjectId), user!.id)
       const limit = getDailyLimit(Number(subjectId))
       const studied = getStudiedToday(Number(subjectId))
-      const remaining = getRemainingToday(Number(subjectId), data.length)
+      const remaining = getRemainingToday(Number(subjectId), unmastered.length)
 
-      setAllWords(data)
+      setAllWords(allData)
+      setUnmasteredCount(unmastered.length)
       setDailyLimitState(limit)
       setStudiedToday(studied.length)
-
-      if (limit > 0 && remaining === 0) {
-        // 今日配额已用完
-        setWords([])
-        setDailyDone(true)
-        setDone(false)
-      } else {
-        setDailyDone(false)
-        // 随机打乱，取今日剩余配额
-        const shuffled = [...data].sort(() => Math.random() - 0.5)
-        const quota = limit > 0 ? shuffled.slice(0, limit) : shuffled
-        setWords(quota)
-      }
-
       setCurrentIndex(0)
       setFlipped(false)
-      setDone(false)
       setUnknownWords([])
       setRound(1)
       setShowingResult(false)
+
+      if (unmastered.length === 0) {
+        setWords([])
+        setDone(true)
+        setDailyDone(false)
+      } else if (limit > 0 && remaining === 0) {
+        setWords([])
+        setDone(false)
+        setDailyDone(true)
+      } else {
+        const shuffled = [...unmastered].sort(() => Math.random() - 0.5)
+        const quota = limit > 0 ? shuffled.slice(0, limit) : shuffled
+        setWords(quota)
+        setDone(false)
+        setDailyDone(false)
+      }
     } catch {}
     setLoading(false)
-  }, [])
+  }, [user])
 
   useEffect(() => {
     if (selectedSubject) fetchWords(selectedSubject)
@@ -126,7 +130,7 @@ export default function Learn() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>单词学习</h1>
-        <p className="text-slate-400 text-sm mt-1">认识直接跳过，不认识翻转查看释义</p>
+        <p className="text-slate-400 text-sm mt-1">只学习未掌握的单词，已掌握的自动跳过</p>
       </div>
 
       {/* Subject selector */}
@@ -161,7 +165,7 @@ export default function Learn() {
             </span>
           )}
           {dailyLimit === 0 && (
-            <span className="text-xs text-slate-500">不限 · 共 {allWords.length} 个</span>
+            <span className="text-xs text-slate-500">不限 · 未掌握 {unmasteredCount} 个</span>
           )}
 
           <AnimatePresence>
