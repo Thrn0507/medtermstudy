@@ -485,22 +485,32 @@ export function getReviewWords(userId: string): Word[] {
   const progress = getProgress().filter(p => p.userId === userId)
   const now = new Date()
 
-  const dueWordIds = progress
-    .filter(p => p.nextReviewAt && new Date(p.nextReviewAt) <= now)
-    .map(p => p.wordId)
+  // 获取昨天学习过的单词
+  const yesterday = new Date(now)
+  yesterday.setHours(0, 0, 0, 0)
+  const yesterdayEnd = new Date(yesterday)
+  yesterdayEnd.setHours(23, 59, 59, 999)
 
-  // If no due words, return some random words for review
-  if (dueWordIds.length === 0) {
-    const reviewedIds = new Set(progress.map(p => p.wordId))
-    const unreviewed = words.filter(w => !reviewedIds.has(w.id))
-    const candidates = unreviewed.length > 0 ? unreviewed : words
-    const shuffled = [...candidates].sort(() => Math.random() - 0.5)
-    return shuffled.slice(0, 5).map(toWord)
+  const yesterdayWords = progress.filter(p => {
+    if (!p.lastReviewedAt) return false
+    const reviewed = new Date(p.lastReviewedAt)
+    return reviewed >= yesterday && reviewed <= yesterdayEnd
+  })
+
+  if (yesterdayWords.length > 0) {
+    const wordIds = yesterdayWords.map(p => p.wordId)
+    return words.filter(w => wordIds.includes(w.id)).map(toWord)
   }
 
-  const dueWords = words.filter(w => dueWordIds.includes(w.id))
-  const shuffled = [...dueWords].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, 10).map(toWord)
+  // 没有昨天学习过的，返回最近学习过的单词
+  progress.sort((a, b) => {
+    const aTime = a.lastReviewedAt ? new Date(a.lastReviewedAt).getTime() : 0
+    const bTime = b.lastReviewedAt ? new Date(b.lastReviewedAt).getTime() : 0
+    return bTime - aTime
+  })
+
+  const recentIds = progress.slice(0, 10).map(p => p.wordId)
+  return words.filter(w => recentIds.includes(w.id)).map(toWord)
 }
 
 function calculateStreak(userId: string): number {
