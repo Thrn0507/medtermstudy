@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/stores/authStore'
-import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope, ScanText, Volume2, Pencil } from 'lucide-react'
+import { Plus, Library, X, Trash2, BookOpen, PlusCircle, Stethoscope, Microscope, ScanText, Volume2, Pencil, Info } from 'lucide-react'
 import { speakWord } from '@/lib/pronunciation'
 import {
   getSubjectsForUser, addSubject as addLocalSubject, deleteSubject as deleteLocalSubject,
@@ -28,6 +28,7 @@ export default function Subjects() {
   const [loading, setLoading] = useState(false)
   const [editingSubjectId, setEditingSubjectId] = useState<number | null>(null)
   const [editSubjectName, setEditSubjectName] = useState('')
+  const [selectedWord, setSelectedWord] = useState<Word | null>(null)
 
   const [newSubjectName, setNewSubjectName] = useState('')
   const [newWord, setNewWord] = useState<Partial<Word>>({
@@ -219,7 +220,11 @@ export default function Subjects() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {words.map(word => (
-                <div key={word.id} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                <div
+                  key={word.id}
+                  onClick={() => setSelectedWord(word)}
+                  className="flex items-start justify-between gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] cursor-pointer hover:bg-white/[0.04] transition-colors"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-white truncate">{word.english}</p>
@@ -234,7 +239,7 @@ export default function Subjects() {
                     {word.phonetic && <p className="text-[10px] text-slate-600">{word.phonetic}</p>}
                   </div>
                   <button
-                    onClick={() => deleteWord(word.id)}
+                    onClick={(e) => { e.stopPropagation(); deleteWord(word.id) }}
                     className="p-1.5 text-slate-500 hover:text-red-400 flex-shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -245,6 +250,81 @@ export default function Subjects() {
           )}
         </div>
       )}
+
+      {/* Word Detail Modal */}
+      <AnimatePresence>
+        {selectedWord && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setSelectedWord(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#0d1b2a] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => speakWord(selectedWord.english)}
+                  className="flex items-center gap-2 text-blue-400 hover:text-blue-300"
+                >
+                  <Volume2 className="w-5 h-5" />
+                </button>
+                <button onClick={() => setSelectedWord(null)} className="text-slate-500 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-center mb-6">
+                <p className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+                  {selectedWord.english}
+                </p>
+                {selectedWord.pronunciation && (
+                  <p className="text-sm text-cyan-400">{selectedWord.pronunciation}</p>
+                )}
+                {selectedWord.phonetic && !selectedWord.pronunciation && (
+                  <p className="text-sm text-cyan-400">{selectedWord.phonetic}</p>
+                )}
+                <p className="text-xl font-medium text-slate-200 mt-3">{selectedWord.chinese}</p>
+              </div>
+
+              {selectedWord.definition && (
+                <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <p className="text-xs text-slate-500 mb-1">释义</p>
+                  <p className="text-sm text-slate-300 leading-relaxed">{selectedWord.definition}</p>
+                </div>
+              )}
+
+              {selectedWord.exampleSentence && (
+                <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <p className="text-xs text-slate-500 mb-1">例句</p>
+                  <p className="text-sm text-slate-300 italic">"{selectedWord.exampleSentence}"</p>
+                  {selectedWord.exampleTranslation && (
+                    <p className="text-xs text-slate-400 mt-1">{selectedWord.exampleTranslation}</p>
+                  )}
+                </div>
+              )}
+
+              {selectedWord.root && (
+                <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <p className="text-xs text-slate-500 mb-1">词根</p>
+                  <p className="text-sm text-slate-300">
+                    <span className="text-cyan-400 font-medium">{selectedWord.root}</span>
+                    {selectedWord.rootMeaning && <span className="ml-2 text-slate-400">— {selectedWord.rootMeaning}</span>}
+                  </p>
+                </div>
+              )}
+
+              {!selectedWord.definition && !selectedWord.exampleSentence && !selectedWord.root && (
+                <p className="text-center text-slate-500 text-sm py-4">暂无更多信息</p>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add Subject Modal */}
       <AnimatePresence>
