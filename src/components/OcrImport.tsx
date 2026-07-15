@@ -20,9 +20,10 @@ export default function TextImport({ onResult, onClose }: Props) {
   const [results, setResults] = useState<TextImportResult[]>([])
   const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set())
   const [fetchingPhonetics, setFetchingPhonetics] = useState(false)
+  const [loadingDoc, setLoadingDoc] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // 解析文本提取英文-音标-中文-释义
   const parseText = (input: string): TextImportResult[] => {
     const lines = input
       .split('\n')
@@ -52,7 +53,6 @@ export default function TextImport({ onResult, onClose }: Props) {
       let chinese = ''
       let definition = ''
 
-      // 格式1: 英文 /音标/ 中文 | 释义
       const slashMatch = line.match(/^([a-zA-Z\s\-]+)\s+([\/\[]([^\]\/]+)[\/\]])\s+(.+)$/)
       if (slashMatch) {
         english = slashMatch[1].trim()
@@ -67,7 +67,6 @@ export default function TextImport({ onResult, onClose }: Props) {
         }
       }
 
-      // 格式2: 英文 - 音标 - 中文 | 释义
       const dashMatch = line.match(/^([a-zA-Z\s\-]+)\s+[-–]\s+([^\s\-]+)\s+[-–]\s+(.+)$/)
       if (dashMatch) {
         english = dashMatch[1].trim()
@@ -82,7 +81,6 @@ export default function TextImport({ onResult, onClose }: Props) {
         }
       }
 
-      // 格式3: 英文 中文 | 释义（无音标）
       const simpleMatch = line.match(/^([a-zA-Z\s\-]+)[\s\/\-：:]+(.+)$/)
       if (simpleMatch) {
         english = simpleMatch[1].trim()
@@ -96,20 +94,17 @@ export default function TextImport({ onResult, onClose }: Props) {
         }
       }
 
-      // 英文 + 音标同行，等待中文
       const engWithPhonetic = line.match(/^([a-zA-Z\s\-]+)\s+([\/\[].+[\/\]])$/)
       if (engWithPhonetic && !/[\u4e00-\u9fff]/.test(line)) {
         pending = { english: engWithPhonetic[1].trim(), pronunciation: engWithPhonetic[2].trim() }
         continue
       }
 
-      // 纯英文行，等待中文
       if (/^[a-zA-Z\s\-]{2,}$/.test(line) && !/[\u4e00-\u9fff]/.test(line)) {
         pending = { english: line.trim(), pronunciation: '' }
         continue
       }
 
-      // 中文行（可含|释义），配对上一行英文
       if (pending && /[\u4e00-\u9fff]/.test(line)) {
         const cd = splitChineseAndDef(cleanChinese(line))
         pairs.push({
@@ -126,7 +121,6 @@ export default function TextImport({ onResult, onClose }: Props) {
     return pairs.filter(p => p.english && p.chinese)
   }
 
-  // 自动查询缺失的音标
   const enrichPhonetics = async (parsed: TextImportResult[]) => {
     const missing = parsed.filter(p => !p.pronunciation)
     if (missing.length === 0) return parsed
@@ -146,22 +140,67 @@ export default function TextImport({ onResult, onClose }: Props) {
     return enriched
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processExtractedText = async (content: string) => {
+    setText(content)
+    const parsed = parseText(content)
+    setResults(parsed)
+    setSelectedResults(new Set(parsed.map((_, i) => i)))
+    const enriched = await enrichPhonetics(parsed)
+    setResults(enriched)
+    setSelectedResults(new Set(enriched.map((_, i) => i)))
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const content = event.target?.result as string
-      setText(content)
-      const parsed = parseText(content)
-      setResults(parsed)
-      setSelectedResults(new Set(parsed.map((_, i) => i)))
-      const enriched = await enrichPhonetics(parsed)
-      setResults(enriched)
-      setSelectedResults(new Set(enriched.map((_, i) => i)))
+    setLoadingDoc(true)
+
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+
+      if (ext === 'pdf') {
+        setLoadingMsg('正在解析PDF文档...')
+        const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist')
+        GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs'
+
+        const arrayBuffer = await file.arrayBuffer()
+        const pdf = await getDocument({ data: arrayBuffer }).promise
+        const textParts: string[] = []
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          setLoadingMsg(`正在解析PDF第 ${i}/${pdf.numPages} 页...`)
+          const page = await pdf.getPage(i)
+          const textContent = await page.getTextContent()
+          const pageText = textContent.items.map((item: any) => item.str).join(' ')
+          textParts.push(pageText)
+        }
+
+        await processExtractedText(textParts.join('\n'))
+      } else if (ext === 'docx') {
+        setLoadingMsg('正在解析Word文档...')
+        const mammoth = await import('mammoth')
+        const arrayBuffer = await file.arrayBuffer()
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        await processExtractedText(result.value)
+      } else {
+        // fallback for plain text
+        const reader = new FileReader()
+        reader.onload = async (event) => {
+          const content = event.target?.result as string
+          await processExtractedText(content)
+        }
+        reader.readAsText(file, 'utf-8')
+      }
+    } catch (err) {
+      console.error('文件解析失败:', err)
+      setLoadingMsg('文件解析失败，请检查文件格式')
+      setTimeout(() => setLoadingMsg(''), 3000)
+    } finally {
+      if (file.name.endsWith('.pdf') || file.name.endsWith('.docx')) {
+        setLoadingDoc(false)
+      }
     }
-    reader.readAsText(file, 'utf-8')
   }
 
   const handleTextChange = async (value: string) => {
@@ -205,19 +244,20 @@ export default function TextImport({ onResult, onClose }: Props) {
             <input
               ref={fileRef}
               type="file"
-              accept=".txt,.md,.csv"
+              accept=".docx,.pdf"
               className="hidden"
               onChange={handleFileUpload}
             />
             <button
               onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400 hover:bg-blue-600/30 transition-colors"
+              disabled={loadingDoc}
+              className="w-full flex items-center justify-center gap-3 py-4 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400 hover:bg-blue-600/30 transition-colors disabled:opacity-50"
             >
               <FileText className="w-6 h-6" />
-              <span className="text-sm">上传文本文档 (.txt)</span>
+              <span className="text-sm">{loadingDoc ? loadingMsg : '上传 Word / PDF 文档'}</span>
             </button>
             <p className="text-xs text-slate-500 text-center">
-              支持 .txt 文件批量导入，自动查询音标
+              支持 .docx 和 .pdf 文件，自动提取文本并解析单词
             </p>
           </div>
 
