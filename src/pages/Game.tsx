@@ -133,7 +133,7 @@ export default function Game() {
 
   if (!selectedSubject) {
     return (
-      <div className="max-w-2xl mx-auto text-center space-y-6 py-12">
+      <div className="max-w-3xl mx-auto text-center space-y-8 py-12">
         <div>
           <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>单词消消乐</h1>
           <p className="text-slate-400 text-sm mt-1">点击配对的英文和中文，全部消除即胜利</p>
@@ -172,12 +172,12 @@ export default function Game() {
           </AnimatePresence>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {subjects.map(s => (
             <button
               key={s.id}
               onClick={() => startGame(String(s.id), pairCount)}
-              className="bg-white/[0.03] border border-white/[0.06] rounded-xl py-3 px-4 text-sm text-slate-200 hover:border-blue-500/40 hover:bg-white/[0.06] transition-colors"
+              className="bg-white/[0.03] border border-white/[0.06] rounded-xl py-4 px-5 text-base text-slate-200 hover:border-blue-500/40 hover:bg-white/[0.06] transition-colors"
             >
               {s.name}
             </button>
@@ -190,7 +190,7 @@ export default function Game() {
   }
 
   return (
-    <div className="max-w-md mx-auto space-y-4">
+    <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">单词消消乐</h1>
@@ -207,9 +207,9 @@ export default function Game() {
         </div>
       </div>
 
-      <p className="text-xs text-slate-500">点击英文和中文配对，全部消除即胜利</p>
+      <p className="text-sm text-slate-500">点击英文和中文配对，全部消除即胜利</p>
 
-      <div className={`grid ${getGridCols(pairCount)} gap-2`}>
+      <div className={`grid grid-cols-4 gap-3`}>
         {cards.map(card => (
           <motion.div
             key={card.id}
@@ -221,7 +221,7 @@ export default function Game() {
             }}
             transition={{ duration: 0.3 }}
             onClick={() => selectCard(card)}
-            className={`aspect-square rounded-lg cursor-pointer flex items-center justify-center p-1.5 border transition-all duration-200 ${
+            className={`aspect-square rounded-xl cursor-pointer flex items-center justify-center p-3 border transition-all duration-200 ${
               card.matched
                 ? 'pointer-events-none'
                 : selectedIds.includes(card.id)
@@ -231,8 +231,8 @@ export default function Game() {
           >
             <span className={`text-center leading-tight ${
               card.type === 'en'
-                ? 'text-xs font-bold text-white'
-                : 'text-[11px] text-slate-300'
+                ? 'text-sm font-bold text-white'
+                : 'text-sm text-slate-300'
             }`}>
               {card.content}
             </span>
@@ -240,7 +240,7 @@ export default function Game() {
         ))}
       </div>
 
-      <p className="text-center text-xs text-slate-500">
+      <p className="text-center text-sm text-slate-500">
         已配对 {matchedCount}/{cards.length / 2} 对
       </p>
 
